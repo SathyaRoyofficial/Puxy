@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooms     RoomParticipant[]
+  messages  Message[]
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  locked    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  participants RoomParticipant[]
+  messages     Message[]
+  invites      Invite[]
+}
+
+model RoomParticipant {
+  id       String   @id @default(uuid())
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  joinedAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  VOICE
+  GIF
+  STICKER
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  room      Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String
+  sender    User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderId  String
+  
+  content   String      // Could be encrypted text or media URL
+  type      MessageType @default(TEXT)
+  
+  isSecret  Boolean     @default(false)
+  expiresAt DateTime?   // For disappearing messages
+  createdAt DateTime    @default(now())
+}
+
+model Invite {
+  id        String   @id @default(uuid())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
