@@ -24,7 +24,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) return;
-    fetch(`http://localhost:3001/api/rooms/${user.id}`)
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+    fetch(`${backendUrl}/api/rooms/${user.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.rooms) {
@@ -38,7 +39,8 @@ export default function Dashboard() {
     if (!user) return;
     setIsCreatingRoom(true);
     try {
-      const res = await fetch("http://localhost:3001/api/rooms", {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+      const res = await fetch(`${backendUrl}/api/rooms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),
