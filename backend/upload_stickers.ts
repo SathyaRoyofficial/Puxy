@@ -5,8 +5,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Folder where your local GIFs are stored (relative to backend folder)
-const STICKERS_DIR = path.join(__dirname, 'stickers');
+// Folder where your local GIFs are stored
+const STICKERS_DIR = 'C:\\Users\\propa\\Downloads\\Save as GIF';
 // Where to save the output JSON for the frontend
 const OUTPUT_FILE = path.join(__dirname, '../frontend/public/stickers.json');
 
