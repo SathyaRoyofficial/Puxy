@@ -67,9 +67,9 @@ app.post('/api/rooms', async (req, res) => {
     });
 
     res.json({ room, inviteLink: `${process.env.FRONTEND_URL}/join/${invite.token}` });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to create room' });
+    res.status(500).json({ error: 'Failed to create room', details: error.message || String(error) });
   }
 });
 
@@ -117,9 +117,9 @@ app.post('/api/join/:token', async (req, res) => {
     }
 
     res.json({ roomId: room.id });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to join room' });
+    res.status(500).json({ error: 'Failed to join room', details: error.message || String(error) });
   }
 });
 
@@ -171,9 +171,9 @@ app.get('/api/rooms/:userId', async (req, res) => {
     }));
 
     res.json({ rooms: activeRooms });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to fetch rooms' });
+    res.status(500).json({ error: 'Failed to fetch rooms', details: error.message || String(error) });
   }
 });
 
