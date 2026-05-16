@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Image as ImageIcon, Smile, MoreVertical, Shield, Lock, EyeOff, Paperclip, Mic } from "lucide-react";
+import { Send, Image as ImageIcon, Smile, MoreVertical, Shield, Lock, EyeOff, Paperclip, Mic, Sticker } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from "socket.io-client";
+import EmojiPicker, { Theme } from "emoji-picker-react";
 
 interface Message {
   id: string;
@@ -25,7 +26,17 @@ export default function ChatRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [participantCount, setParticipantCount] = useState(1);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [stickers, setStickers] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/stickers.json')
+      .then(res => res.json())
+      .then(data => setStickers(data))
+      .catch(err => console.error("Failed to load stickers", err));
+  }, []);
 
   // Set active user ID on mount (supports guest login)
   useEffect(() => {
@@ -227,7 +238,40 @@ export default function ChatRoom() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-black/50 backdrop-blur-xl border-t border-white/5">
+        <div className="p-4 bg-black/50 backdrop-blur-xl border-t border-white/5 relative">
+          
+          {showEmojiPicker && (
+            <div className="absolute bottom-20 left-4 z-50 shadow-2xl rounded-2xl overflow-hidden border border-white/10">
+              <EmojiPicker 
+                theme={Theme.DARK} 
+                onEmojiClick={(emojiData) => {
+                  setInput(prev => prev + emojiData.emoji);
+                }}
+              />
+            </div>
+          )}
+
+          {showStickerPicker && (
+            <div className="absolute bottom-20 left-16 z-50 w-72 h-80 bg-neutral-900 shadow-2xl rounded-2xl overflow-y-auto border border-white/10 p-2 grid grid-cols-3 gap-2">
+              {stickers.length > 0 ? stickers.map((stickerUrl, idx) => (
+                <img 
+                  key={idx} 
+                  src={stickerUrl} 
+                  alt="Sticker" 
+                  className="w-full h-20 object-cover rounded-xl cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => {
+                    socket?.emit("sendMessage", { roomId, userId: activeUserId, text: stickerUrl, type: "IMAGE" });
+                    setShowStickerPicker(false);
+                  }}
+                />
+              )) : (
+                <div className="col-span-3 text-center text-sm text-neutral-500 mt-10">
+                  No stickers found.<br/>Upload them using the backend script!
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="max-w-4xl mx-auto flex items-end gap-2 bg-neutral-900/50 border border-white/10 rounded-3xl p-2 transition-colors focus-within:border-white/30 focus-within:bg-neutral-900">
             <input 
               type="file" 
@@ -241,6 +285,26 @@ export default function ChatRoom() {
               className="p-3 text-neutral-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
             >
               <Paperclip className="w-5 h-5" />
+            </button>
+            
+            <button 
+              onClick={() => {
+                setShowEmojiPicker(!showEmojiPicker);
+                setShowStickerPicker(false);
+              }}
+              className="p-3 text-neutral-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
+            >
+              <Smile className="w-5 h-5" />
+            </button>
+
+            <button 
+              onClick={() => {
+                setShowStickerPicker(!showStickerPicker);
+                setShowEmojiPicker(false);
+              }}
+              className="p-3 text-neutral-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
+            >
+              <Sticker className="w-5 h-5" />
             </button>
             
             <textarea
