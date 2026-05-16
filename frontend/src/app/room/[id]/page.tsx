@@ -42,7 +42,8 @@ export default function ChatRoom() {
 
   useEffect(() => {
     if (!activeUserId) return;
-    const newSocket = io("http://localhost:3001");
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+    const newSocket = io(backendUrl);
     setSocket(newSocket);
 
     newSocket.on("connect", () => {
@@ -91,7 +92,8 @@ export default function ChatRoom() {
 
     try {
       // 1. Upload to backend/Cloudinary
-      const res = await fetch("http://localhost:3001/api/media", {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+      const res = await fetch(`${backendUrl}/api/media`, {
         method: "POST",
         body: formData,
       });

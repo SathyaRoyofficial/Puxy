@@ -30,7 +30,8 @@ export default function JoinRoom() {
           activeUserId = guestId;
         }
 
-        const res = await fetch(`http://localhost:3001/api/join/${params.token}`, {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+        const res = await fetch(`${backendUrl}/api/join/${params.token}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: activeUserId }),
