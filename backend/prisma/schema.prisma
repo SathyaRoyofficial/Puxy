@@ -20,9 +20,10 @@ model User {
 }
 
 model Room {
-  id        String   @id @default(uuid())
-  locked    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id        String    @id @default(uuid())
+  locked    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime? // 24h auto-expiry for temporary rooms
 
   participants RoomParticipant[]
   messages     Message[]
@@ -55,13 +56,29 @@ model Message {
   roomId    String
   sender    User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
   senderId  String
-  
-  content   String      // Could be encrypted text or media URL
+
+  content   String      // Encrypted ciphertext (AES-GCM)
   type      MessageType @default(TEXT)
-  
-  isSecret  Boolean     @default(false)
-  expiresAt DateTime?   // For disappearing messages
-  createdAt DateTime    @default(now())
+
+  // Reply threading
+  replyToId String?
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReplies")
+
+  // Soft delete / unsend
+  deletedAt          DateTime?
+  deletedForEveryone Boolean   @default(false)
+
+  // Read receipts
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  // Media cleanup
+  mediaPublicId String? // Cloudinary public_id for deletion
+
+  isSecret  Boolean   @default(false)
+  expiresAt DateTime? // For disappearing messages
+  createdAt DateTime  @default(now())
 }
 
 model Invite {
