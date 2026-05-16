@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
@@ -32,43 +32,35 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// ─── In-memory tracking ──────────────────────────────────────────────────────
-// Map<userId, { socketId, lastSeen }>
+// In-memory tracking
 const onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
-// Map<roomId, Set<socketId>>
-const roomSockets = new Map<string, Set<string>>();
 
 // ─── Health ───────────────────────────────────────────────────────────────────
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/health', (_req: any, res: any) => {
   res.json({ status: 'ok', message: 'Puxy backend is running' });
 });
 
 // ─── Create Room ──────────────────────────────────────────────────────────────
-app.post('/api/rooms', async (req: Request, res: Response) => {
+app.post('/api/rooms', async (req: any, res: any) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
 
-    let user = await prisma.user.findUnique({ where: { clerkId: userId } });
+    let user = await prisma.user.findUnique({ where: { clerkId: String(userId) } });
     if (!user) {
       user = await prisma.user.create({
-        data: { clerkId: userId, email: `${userId}@puxy.internal` },
+        data: { clerkId: String(userId), email: `${userId}@puxy.internal` },
       });
     }
 
-    // Room expires 24 hours from now
     const roomExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
     const room = await prisma.room.create({
       data: {
         expiresAt: roomExpiresAt,
-        participants: {
-          create: { userId: user.id }
-        }
+        participants: { create: { userId: user.id } }
       }
     });
 
-    // Invite expires in 4 hours
     const invite = await prisma.invite.create({
       data: {
         roomId: room.id,
@@ -89,17 +81,15 @@ app.post('/api/rooms', async (req: Request, res: Response) => {
 });
 
 // ─── Get Active Rooms for User ────────────────────────────────────────────────
-app.get('/api/rooms/:userId', async (req: Request, res: Response) => {
+app.get('/api/rooms/:userId', async (req: any, res: any) => {
   try {
-    const { userId } = req.params;
-
+    const userId = String(req.params.userId);
     const user = await prisma.user.findUnique({ where: { clerkId: userId } });
     if (!user) return res.json({ rooms: [] });
 
     const rooms = await prisma.room.findMany({
       where: {
         participants: { some: { userId: user.id } },
-        // Only show non-expired rooms
         OR: [
           { expiresAt: null },
           { expiresAt: { gt: new Date() } },
@@ -112,13 +102,12 @@ app.get('/api/rooms/:userId', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    const activeRooms = rooms.map(room => ({
+    const activeRooms = rooms.map((room: any) => ({
       id: room.id,
       locked: room.locked,
       participantCount: room.participants.length,
       createdAt: room.createdAt,
       expiresAt: room.expiresAt,
-      // Always include invite link if one exists (even for locked rooms)
       inviteLink: room.invites.length > 0 && room.invites[0].expiresAt > new Date()
         ? `${process.env.FRONTEND_URL}/join/${room.invites[0].token}`
         : null,
@@ -132,9 +121,9 @@ app.get('/api/rooms/:userId', async (req: Request, res: Response) => {
 });
 
 // ─── Join Room via Invite Token ───────────────────────────────────────────────
-app.post('/api/join/:token', async (req: Request, res: Response) => {
+app.post('/api/join/:token', async (req: any, res: any) => {
   try {
-    const { token } = req.params;
+    const token = String(req.params.token);
     const { userId } = req.body;
 
     const invite = await prisma.invite.findUnique({ where: { token } });
@@ -152,14 +141,14 @@ app.post('/api/join/:token', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Room is full' });
     }
 
-    let user = await prisma.user.findUnique({ where: { clerkId: userId } });
+    let user = await prisma.user.findUnique({ where: { clerkId: String(userId) } });
     if (!user) {
       user = await prisma.user.create({
-        data: { clerkId: userId, email: `${userId}@puxy.internal` },
+        data: { clerkId: String(userId), email: `${userId}@puxy.internal` },
       });
     }
 
-    const existingParticipant = room.participants.find(p => p.userId === user?.id);
+    const existingParticipant = room.participants.find((p: any) => p.userId === user?.id);
     if (!existingParticipant) {
       await prisma.roomParticipant.create({
         data: { roomId: room.id, userId: user.id }
@@ -180,48 +169,39 @@ app.post('/api/join/:token', async (req: Request, res: Response) => {
 });
 
 // ─── Media Upload ─────────────────────────────────────────────────────────────
-app.post('/api/media', upload.single('file'), async (req: Request, res: Response) => {
+app.post('/api/media', upload.single('file'), async (req: any, res: any) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const result = await cloudinary.uploader.upload(req.file.path, {
+    const result = await (cloudinary.uploader as any).upload(req.file.path, {
       folder: 'puxy',
       resource_type: 'auto',
     });
     res.json({ url: result.secure_url, publicId: result.public_id });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
     res.status(500).json({ error: 'Media upload failed' });
   }
 });
 
-// ─── Delete Room (Full cleanup) ───────────────────────────────────────────────
-app.delete('/api/rooms/:roomId', async (req: Request, res: Response) => {
+// ─── Delete Room ──────────────────────────────────────────────────────────────
+app.delete('/api/rooms/:roomId', async (req: any, res: any) => {
   try {
-    const { roomId } = req.params;
+    const roomId = String(req.params.roomId);
 
-    // Fetch all media messages for Cloudinary cleanup
     const mediaMessages = await prisma.message.findMany({
       where: { roomId, mediaPublicId: { not: null } },
       select: { mediaPublicId: true }
     });
 
-    // Delete Cloudinary assets
     for (const msg of mediaMessages) {
       if (msg.mediaPublicId) {
-        try {
-          await cloudinary.uploader.destroy(msg.mediaPublicId, { resource_type: 'auto' });
-        } catch (e) {
-          console.error('Cloudinary delete error:', e);
-        }
+        try { await (cloudinary.uploader as any).destroy(msg.mediaPublicId, { resource_type: 'auto' }); }
+        catch (e) { console.error('Cloudinary delete error:', e); }
       }
     }
 
-    // Delete room (cascades: messages, participants, invites)
     await prisma.room.delete({ where: { id: roomId } });
-
-    // Notify all room sockets
     io.to(roomId).emit('roomDeleted', { roomId });
-
     res.json({ success: true });
   } catch (error: any) {
     console.error(error);
@@ -230,31 +210,21 @@ app.delete('/api/rooms/:roomId', async (req: Request, res: Response) => {
 });
 
 // ─── Delete Single Message ────────────────────────────────────────────────────
-app.delete('/api/messages/:messageId', async (req: Request, res: Response) => {
+app.delete('/api/messages/:messageId', async (req: any, res: any) => {
   try {
-    const { messageId } = req.params;
-    const { forEveryone } = req.body;
-
+    const messageId = String(req.params.messageId);
     const message = await prisma.message.findUnique({ where: { id: messageId } });
     if (!message) return res.status(404).json({ error: 'Message not found' });
 
     if (message.mediaPublicId) {
-      try {
-        await cloudinary.uploader.destroy(message.mediaPublicId, { resource_type: 'auto' });
-      } catch (e) {
-        console.error('Cloudinary delete error:', e);
-      }
+      try { await (cloudinary.uploader as any).destroy(message.mediaPublicId, { resource_type: 'auto' }); }
+      catch (e) { console.error('Cloudinary delete error:', e); }
     }
 
     await prisma.message.update({
       where: { id: messageId },
-      data: {
-        deletedAt: new Date(),
-        deletedForEveryone: !!forEveryone,
-        content: forEveryone ? '[deleted]' : message.content,
-      }
+      data: { deletedAt: new Date(), deletedForEveryone: true, content: '[deleted]' }
     });
-
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to delete message', details: error.message });
@@ -262,10 +232,9 @@ app.delete('/api/messages/:messageId', async (req: Request, res: Response) => {
 });
 
 // ─── Refresh Invite Link ──────────────────────────────────────────────────────
-app.post('/api/rooms/:roomId/invite', async (req: Request, res: Response) => {
+app.post('/api/rooms/:roomId/invite', async (req: any, res: any) => {
   try {
-    const { roomId } = req.params;
-
+    const roomId = String(req.params.roomId);
     const invite = await prisma.invite.create({
       data: {
         roomId,
@@ -273,7 +242,6 @@ app.post('/api/rooms/:roomId/invite', async (req: Request, res: Response) => {
         expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
       }
     });
-
     res.json({ inviteLink: `${process.env.FRONTEND_URL}/join/${invite.token}` });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to create invite', details: error.message });
@@ -287,18 +255,13 @@ io.on('connection', (socket) => {
   let currentUserId: string | null = null;
   let currentRoomId: string | null = null;
 
-  // ── joinRoom ──────────────────────────────────────────────────────────────
   socket.on('joinRoom', async ({ roomId, userId }: { roomId: string; userId: string }) => {
     socket.join(roomId);
     currentUserId = userId;
     currentRoomId = roomId;
 
-    // Track online
     onlineUsers.set(userId, { socketId: socket.id, lastSeen: new Date() });
-
-    // Track room sockets
-    if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Set());
-    roomSockets.get(roomId)!.add(socket.id);
+    socket.to(roomId).emit('userOnline', { userId });
 
     const room = await prisma.room.findUnique({
       where: { id: roomId },
@@ -312,10 +275,7 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Notify partner of online status
-    socket.to(roomId).emit('userOnline', { userId });
-
-    // Fetch previous messages
+    // Fetch previous messages - send clerkId as senderId for client matching
     const messages = await prisma.message.findMany({
       where: { roomId },
       orderBy: { createdAt: 'asc' },
@@ -325,7 +285,7 @@ io.on('connection', (socket) => {
       }
     });
 
-    socket.emit('previousMessages', messages.map(m => ({
+    socket.emit('previousMessages', messages.map((m: any) => ({
       id: m.id,
       content: m.content,
       type: m.type,
@@ -344,20 +304,22 @@ io.on('connection', (socket) => {
       } : null,
     })));
 
-    // Mark all unread messages from partner as delivered
-    await prisma.message.updateMany({
-      where: {
-        roomId,
-        senderId: { not: userId },
-        deliveredAt: null,
-        deletedAt: null,
-      },
-      data: { deliveredAt: new Date() }
-    });
-    socket.to(roomId).emit('messagesDelivered', { roomId });
+    // Mark partner's messages as delivered
+    const userRecord = await prisma.user.findUnique({ where: { clerkId: userId } });
+    if (userRecord) {
+      await prisma.message.updateMany({
+        where: {
+          roomId,
+          senderId: { not: userRecord.id },
+          deliveredAt: null,
+          deletedAt: null,
+        },
+        data: { deliveredAt: new Date() }
+      });
+      socket.to(roomId).emit('messagesDelivered', { roomId });
+    }
   });
 
-  // ── sendMessage ───────────────────────────────────────────────────────────
   socket.on('sendMessage', async (data: {
     roomId: string;
     userId: string;
@@ -396,18 +358,19 @@ io.on('connection', (socket) => {
         id: message.id,
         content: message.content,
         type: message.type,
-        senderId: message.sender?.clerkId || message.senderId,
-        senderName: message.sender?.name,
+        // Always use clerkId so frontend can match with activeUserId
+        senderId: (message as any).sender?.clerkId || message.senderId,
+        senderName: (message as any).sender?.name,
         createdAt: message.createdAt,
         deliveredAt: message.deliveredAt,
         readAt: message.readAt,
         deletedAt: message.deletedAt,
         deletedForEveryone: message.deletedForEveryone,
         expiresAt: message.expiresAt,
-        replyTo: message.replyTo ? {
-          id: message.replyTo.id,
-          content: message.replyTo.content,
-          senderId: message.replyTo.sender?.clerkId || message.replyTo.senderId,
+        replyTo: (message as any).replyTo ? {
+          id: (message as any).replyTo.id,
+          content: (message as any).replyTo.content,
+          senderId: (message as any).replyTo.sender?.clerkId || (message as any).replyTo.senderId,
         } : null,
       };
 
@@ -417,7 +380,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── typing indicators ─────────────────────────────────────────────────────
   socket.on('typing', ({ roomId, userId }: { roomId: string; userId: string }) => {
     socket.to(roomId).emit('typing', { userId });
   });
@@ -426,46 +388,33 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('stopTyping', { userId });
   });
 
-  // ── deleteMessage (unsend) ────────────────────────────────────────────────
   socket.on('deleteMessage', async (data: {
     messageId: string;
     roomId: string;
     forEveryone: boolean;
   }) => {
     try {
-      const { messageId, roomId, forEveryone } = data;
-
+      const { messageId, roomId } = data;
       const message = await prisma.message.findUnique({ where: { id: messageId } });
       if (!message) return;
 
       if (message.mediaPublicId) {
-        try {
-          await cloudinary.uploader.destroy(message.mediaPublicId, { resource_type: 'auto' });
-        } catch (e) {
-          console.error('Cloudinary delete error:', e);
-        }
+        try { await (cloudinary.uploader as any).destroy(message.mediaPublicId, { resource_type: 'auto' }); }
+        catch (e) { console.error('Cloudinary delete error:', e); }
       }
 
       await prisma.message.update({
         where: { id: messageId },
-        data: {
-          deletedAt: new Date(),
-          deletedForEveryone: forEveryone,
-          content: forEveryone ? '[deleted]' : message.content,
-        }
+        data: { deletedAt: new Date(), deletedForEveryone: true, content: '[deleted]' }
       });
 
-      if (forEveryone) {
-        io.to(roomId).emit('messageDeleted', { messageId, forEveryone: true });
-      } else {
-        socket.emit('messageDeleted', { messageId, forEveryone: false });
-      }
+      // Always delete for everyone
+      io.to(roomId).emit('messageDeleted', { messageId, forEveryone: true });
     } catch (err) {
       console.error('Error deleting message:', err);
     }
   });
 
-  // ── markRead ──────────────────────────────────────────────────────────────
   socket.on('markRead', async ({ roomId, userId }: { roomId: string; userId: string }) => {
     try {
       const user = await prisma.user.findUnique({ where: { clerkId: userId } });
@@ -487,78 +436,52 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── disconnect ────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
-
     if (currentUserId) {
       onlineUsers.set(currentUserId, { socketId: socket.id, lastSeen: new Date() });
     }
-
-    if (currentRoomId) {
-      roomSockets.get(currentRoomId)?.delete(socket.id);
-      if (currentUserId) {
-        socket.to(currentRoomId).emit('userOffline', {
-          userId: currentUserId,
-          lastSeen: new Date(),
-        });
-      }
+    if (currentRoomId && currentUserId) {
+      socket.to(currentRoomId).emit('userOffline', {
+        userId: currentUserId,
+        lastSeen: new Date(),
+      });
     }
   });
 });
 
 // ─── Background Jobs ──────────────────────────────────────────────────────────
-
-// Cleanup expired rooms every 2 minutes
 setInterval(async () => {
   try {
     const expiredRooms = await prisma.room.findMany({
       where: { expiresAt: { lt: new Date() } },
       include: {
-        messages: {
-          where: { mediaPublicId: { not: null } },
-          select: { mediaPublicId: true }
-        }
+        messages: { where: { mediaPublicId: { not: null } }, select: { mediaPublicId: true } }
       }
     });
-
     for (const room of expiredRooms) {
-      for (const msg of room.messages) {
+      for (const msg of (room as any).messages) {
         if (msg.mediaPublicId) {
-          try {
-            await cloudinary.uploader.destroy(msg.mediaPublicId, { resource_type: 'auto' });
-          } catch (e) {
-            // ignore
-          }
+          try { await (cloudinary.uploader as any).destroy(msg.mediaPublicId, { resource_type: 'auto' }); }
+          catch (e) { /* ignore */ }
         }
       }
       await prisma.room.delete({ where: { id: room.id } });
       io.to(room.id).emit('roomDeleted', { roomId: room.id, reason: 'expired' });
-      console.log(`Auto-deleted expired room: ${room.id}`);
     }
-  } catch (e) {
-    console.error('Room expiry job error:', e);
-  }
+  } catch (e) { console.error('Room expiry job error:', e); }
 }, 2 * 60 * 1000);
 
-// Cleanup disappearing messages every minute
 setInterval(async () => {
   try {
     const expiredMessages = await prisma.message.findMany({
-      where: {
-        expiresAt: { lt: new Date() },
-        deletedAt: null,
-      },
+      where: { expiresAt: { lt: new Date() }, deletedAt: null },
       select: { id: true, roomId: true, mediaPublicId: true }
     });
-
     for (const msg of expiredMessages) {
       if (msg.mediaPublicId) {
-        try {
-          await cloudinary.uploader.destroy(msg.mediaPublicId, { resource_type: 'auto' });
-        } catch (e) {
-          // ignore
-        }
+        try { await (cloudinary.uploader as any).destroy(msg.mediaPublicId, { resource_type: 'auto' }); }
+        catch (e) { /* ignore */ }
       }
       await prisma.message.update({
         where: { id: msg.id },
@@ -566,14 +489,11 @@ setInterval(async () => {
       });
       io.to(msg.roomId).emit('messageDeleted', { messageId: msg.id, forEveryone: true, reason: 'expired' });
     }
-  } catch (e) {
-    console.error('Message expiry job error:', e);
-  }
+  } catch (e) { console.error('Message expiry job error:', e); }
 }, 60 * 1000);
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-
 server.listen(PORT, () => {
   console.log(`Puxy backend listening on port ${PORT}`);
 });

@@ -20,11 +20,15 @@ export default function ChatRoom() {
   const router = useRouter();
   const roomId = params?.id as string;
 
+  // Disappear mode must be declared before useChat so disappearSeconds is defined
+  const [disappearMode, setDisappearMode] = useState(false);
+  const disappearSeconds = disappearMode ? 300 : undefined; // 5 minutes
+
   const {
     messages, socket, activeUserId, participantCount,
     isPartnerTyping, isPartnerOnline, partnerLastSeen, roomExpiresAt,
     sendMessage, sendTyping, sendStopTyping, deleteMessage,
-  } = useChat({ roomId });
+  } = useChat({ roomId, disappearSeconds });
 
   const [input, setInput] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
@@ -33,7 +37,6 @@ export default function ChatRoom() {
   const [stickers, setStickers] = useState<Stickers>({ dudububu: [], adulty: [] });
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [contextMsg, setContextMsg] = useState<ChatMessage | null>(null);
-  const [disappearMode, setDisappearMode] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -77,7 +80,7 @@ export default function ChatRoom() {
 
   const handleSend = () => {
     if (!input.trim()) return;
-    sendMessage(input.trim(), "TEXT", replyTo?.id, undefined);
+    sendMessage(input.trim(), "TEXT", replyTo?.id);
     setInput("");
     setReplyTo(null);
     sendStopTyping();
@@ -419,8 +422,8 @@ export default function ChatRoom() {
         <MessageContextMenu
           msg={contextMsg}
           isMe={contextMsg.senderId === activeUserId}
-          onReply={() => setReplyTo(contextMsg)}
-          onDelete={(forEveryone) => deleteMessage(contextMsg.id, forEveryone)}
+          onReply={() => { setReplyTo(contextMsg); setContextMsg(null); }}
+          onDelete={() => { deleteMessage(contextMsg.id, true); setContextMsg(null); }}
           onClose={() => setContextMsg(null)}
         />
       )}
